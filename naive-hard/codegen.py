@@ -1,0 +1,230 @@
+import json
+import re
+
+status_set = set()
+param_re = re.compile("\\$\\(([^\\$]+?):([^\\$]+?)\\)")
+
+def stat2var(id, status):
+    return ("s_%s_%s"%(id, status)).replace("/", "_").replace(".", "_").replace(":", "_")
+
+def stat_isnew(id, status):
+    return ("s_%s_%s_isnew"%(id, status)).replace("/", "_").replace(".", "_").replace(":", "_")
+
+def gen_status_vars(operand):
+    if operand["type"] == 'event':
+        return
+
+    sid = (operand["id"], operand["name"])
+    if sid not in status_set:
+        status_set.add(sid)
+    
+def construct_var_def():
+    var_def = ""
+    for id, name in status_set:
+        if id == 'net1':
+            var_def = var_def + "var %s;\n"%stat2var(id, name)
+            var_def = var_def + "var %s;\n"%stat_isnew(id, name)
+            var_def = var_def + "var %s_isinit;\n"%stat2var(id, name)
+        else:
+            var_def = var_def + "var %s;\n"%stat2var(id, name)
+    return var_def
+
+def update_status():
+    status = ""
+    for id, name in status_set:
+        if id == 'net1':
+            port = name[name.find(":")+1: name.find("/")]
+            parts = name.split("/")
+            parts[0] = parts[0][:parts[0].find(":")]
+            status = status + "if(%s || !%s_isinit) {"%(stat_isnew(id, name), stat2var(id, name));
+            status = "\n".join([status,
+                       "%s_isinit = 1;" % stat2var(id, name),
+                       "var options = {hostname: '%s', port: %s, path: '/%s'," % (parts[0], port, "/".join(parts[1:])),
+                       "method: 'GET'};"
+                       "var req = http.request(options, function(res) {",
+                       "var data;",
+                       "res.on('data', function (chunk) {data = data + chunk;});",
+                       "res.on('end', function() {",
+                       "%s = JSON.parse(data.replace('undefined', ''));\n%s = 1;})"%(stat2var(id, name), stat_isnew(id, name)),
+                       "res.setEncoding('utf8');})",
+                       "req.end()};"])
+        else:
+            status = status +  \
+                     "$('#%s').get%s(function(error, val) { %s = val; });\n" \
+                     %(id, name, stat2var(id, name));
+    return status
+
+def construct_cond2(opd1, opd2, op):
+    cond1 = opd1["expr"].replace("*", stat2var(opd1["id"], opd1["name"]))
+    if opd1["id"] == 'net1':
+        cond1 = "(%s && %s)"%(stat_isnew(opd1["id"], opd1["name"]), cond1)
+
+    cond2 = opd2["expr"].replace("*", stat2var(opd2["id"], opd2["name"]))
+    if opd2["id"] == 'net1':
+        cond2 = "(%s && %s)"%(stat_isnew(opd2["id"], opd2["name"]), cond2)
+
+    return "(%s) %s (%s)"%(cond1, op, cond2)
+
+def construct_act(actions):
+    act_str = ""
+    for act in actions:
+
+        params = ""
+        for p in act["params"]:
+            match = param_re.search(p)
+            while match:
+                s, e = match.span()
+                if len(match.groups()) == 2:
+                    p = p.replace(p[s:e], stat2var(match.group(1), match.group(2)))
+                match = param_re.search(p, e)
+            params = params + "%s, "%(p)
+
+        params = params[:-2]
+        if act["id"] == "ruff":
+            act_str = "\n".join([act_str, "%s(%s);"%(act["name"], params)])
+        elif act["id"] == "net2":
+            port = act["name"][act["name"].find(":")+1: act["name"].find("/")]
+            parts = act["name"].split("/")
+            parts[0] = parts[0][:parts[0].find(":")]
+            act_str = "\n".join([act_str,
+                       "var postData = %s;" % params,
+                       "var options = {hostname: '%s', port: %s, path: '/%s'," % (parts[0], port, "/".join(parts[1:])),
+                       "method: 'POST', headers: {'Content-Length': postData.length, 'Content-Type': 'application/json'}};"
+                       "var req = http.request(options, function(res) {",
+                       "var data;",
+                       "res.on('data', function (chunk) {console.log(chunk)});",
+                       "res.setEncoding('utf8');})",
+                       "req.write(postData);",
+                       "req.end();"])
+        else:
+            act_str = "\n".join([act_str, "$('#%s').%s(%s);\n"%(act["id"], act["name"], params)])
+                                                 
+    return act_str
+
+def _construct_check_ss(m):
+    cond = construct_cond2(m["operand1"], m["operand2"], m["op"])
+    act = construct_act(m["actions"])
+    return "if(%s) {\n%s};\n"%(cond, act)
+
+def _construct_check_se(m):
+    opd1, opd2 = m["operand1"], m["operand2"]
+    if opd2["type"] == 'event':
+        opd1, opd2 = opd2, opd1
+    cond = opd2["expr"].replace("*", stat2var(opd2["id"], opd2["name"]))
+    act_str = "if (%s) {\n%s}"%(cond, construct_act(m["actions"]))
+    return "$('#%s').on('%s', function (error) {\n%s});\n"%(opd1["id"], opd1["name"], act_str)
+
+def _construct_check_s(m):
+    opd = m["operand1"]
+    cond = opd["expr"].replace("*", stat2var(opd["id"], opd["name"]))
+    if opd["id"] == 'net1':
+        cond = "(%s && %s)"%(stat_isnew(opd["id"], opd["name"]), cond)
+    act = construct_act(m["actions"])
+    return "if(%s) {\n%s};\n"%(cond, act)
+
+def _construct_check_e(m):
+    opd = m["operand1"]
+    return "$('#%s').on('%s', function (error) {\n%s});\n"%(opd["id"], opd["name"], construct_act(m["actions"]))
+
+def construct_checks(map_list):
+    checks = ""
+    for m in map_list:
+        if m["type"] == 'cond2':
+            opd1, opd2 = m["operand1"], m["operand2"]
+            if opd1["type"] == 'status' and opd2["type"] == 'status':
+                checks = checks + _construct_check_ss(m)
+        elif m["type"] == 'cond1':
+            opd = m["operand1"]
+            if opd["type"] == 'status':
+                checks = checks + _construct_check_s(m)
+    return checks
+
+def construct_listeners(map_list):
+    listeners = ""
+    for m in map_list:
+        if m["type"] == 'cond2':
+            opd1, opd2 = m["operand1"], m["operand2"]
+            if (opd1["type"] == 'status' and opd2["type"] == 'event') \
+               or (opd1["type"] == 'event' and opd2["type"] == 'status'):
+                listeners = listeners + _construct_check_se(m)
+        elif m["type"] == 'cond1':
+            opd = m["operand1"]
+            if opd["type"] == 'event':
+                listeners = listeners + _construct_check_e(m)
+    
+    return listeners
+
+def construct_inits(map_list):
+    inits = ""
+    for m in map_list:
+        if m["type"] != 'init':
+            continue
+        inits = inits + construct_act(m["actions"])
+
+    return inits
+
+
+def construct_timer(map_list):
+    status = update_status()
+    checks = construct_checks(map_list)
+    return "setInterval(function() {\n%s\n%s}, \n800)"%(checks, status)
+
+def construct_shutdown():
+    return ""
+
+def gen(map_list, out_file):
+    for m in map_list:
+        try:
+            gen_status_vars(m["operand1"])
+            gen_status_vars(m["operand2"])
+        except KeyError:
+            pass
+    
+    requires = "var http = require('http');\n" 
+    var_def = construct_var_def()
+    inits = construct_inits(map_list)
+    timers = construct_timer(map_list)
+    listeners = construct_listeners(map_list)
+    down = construct_shutdown()
+    body = "\n".join([requires, var_def, inits, listeners, timers, down])
+    out_str = "$.ready(function (error) {\n%s}\n);\n"%(body)
+
+    print(out_str)
+    with open(out_file, "w") as f:
+        f.write(out_str)
+
+gen([
+    {"type" : "init",
+     "actions": [{"id": "lcd", "name": "setCursor", "params":["0", "0"]},
+                 {"id": "net2", "name": "121.201.69.165:8000/variables/add", "params":["'{\"abc\": 123}'"]}]
+     },
+
+    {"type": "cond1",
+     "operand1":{"id":"net1", "name":"121.201.69.165:8000/variables/abc", "type": "status", "expr": "*"}, 
+     "actions": [
+         {"id": "ruff", "name": "console.log", "params":["'asdfsfsadfasdf'"]},
+         {"id": "lcd", "name": "clear", "params":[]},
+         {"id": "lcd", "name": "print", "params":["$(net1:121.201.69.165:8000/variables/abc)+''"]}
+    ]},
+
+    {"type": "cond1",
+     "operand1":{"id":"button", "name": "push", "type": "event"}, 
+     "actions": [
+         {"id": "net2", "name": "121.201.69.165:8000/set_config", "params":["'[1, 2, 3]'"]}
+     ]},
+    
+    {"type": "cond2",
+     "operand1":{"id":"remp", "name": "Temperature", "type": "status", "expr": "*>50"},
+      "operand2":{"id":"remp", "name": "RelativeHumidity", "type": "status", "expr": "*>99"}, 
+      "op": "||", 
+      "actions": [
+          {"id": "lcd", "name": "clear", "params":[]},
+          {"id": "lcd", "name": "print", "params":["$(remp:Temperature) + 'k' + $(remp:RelativeHumidity)"]}
+      ]},
+
+     {"type": "cond2",
+      "operand1":{"id":"remp", "name": "Temperature", "type": "status", "expr": "*>20"}, 
+      "operand2":{"id":"sound", "name": "sound", "type": "event"}, 
+      "op": "&&", 
+      "actions": [{"id": "led-r", "name": "turnOn", "params":[]}]}],
+    "src/index.js")

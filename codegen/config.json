@@ -1,0 +1,1 @@
+{"actions[id]": "lcd", "actions[name]": "print", "actions[params]": "", "op": "||", "operand1[id]": "button", "operand1[name]": "push", "operand1[type]": "event", "operand2[expr]": "*>20", "operand2[id]": "remp", "operand2[name]": "Temperature", "operand2[type]": "status", "type": "cond2"}

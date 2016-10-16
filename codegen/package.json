@@ -1,0 +1,20 @@
+{
+    "name": "test",
+    "version": "0.1.0",
+    "description": "",
+    "author": "",
+    "main": "src/index.js",
+    "ruff": {
+        "boards": {
+            "ruff-mbd-v1": "^4.1.2",
+            "*": "*"
+        },
+        "dependencies": {
+            "buzzer-gpio": "^0.2.3",
+            "button-gpio": "^2.0.4",
+            "lcd1602-pcf8574a-hd44780": "^0.2.5",
+            "sound-01": "^1.1.3",
+            "dht11": "^0.3.3"
+        }
+    }
+}
