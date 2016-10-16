@@ -1,0 +1,80 @@
+[
+    {
+        "name": "LCD Display",
+        "mod_name": "LCD1602-02",
+        "events": [],
+        "status": [],
+        "properties": [],
+        "actions": [
+            {
+                "name": "print",
+                "params": [{"name": "text", "optional": false}, {"name": "callback", "optional": true}],
+                "description": "Print text at current cursor."
+            },
+
+            {
+                "name": "clear",
+                "params": [{"name": "callback", "optional":true}],
+                "description": "Clear the display."
+            },
+
+            {
+                "name": "setCursor",
+                "params": [{"name": "x", "optional":false},{"name": "y", "optional":false},{"name": "callback", "optional":true}],
+                "description": "Set cursor coordinates, (0, 0) refer to the first character of the first line."
+            },
+
+            {
+                "name": "turnOn",
+                "params": [{"name": "callback", "optional":true}],
+                "description": "Turn on the display."
+            },
+
+            {
+                "name": "turnOff",
+                "params": [{"name": "callback", "optional":true}],
+                "description": "Turn on the display."
+            }
+        ]
+    },
+    
+    {
+        "name": "Sound Sensor",
+        "mod_name": "SOUND-01",
+        "events": ["sound"],
+        "status": [],
+        "properties": [
+            {
+                "name": "interval", 
+                "optional": true,
+                "description": "Minimum interval between two sound events, defaults to 1000 milliseconds."
+            },
+            {
+                "name": "enabled", 
+                "optional": true,
+                "description": "Whether to enable this device once it gets loaded, defaults to  true ."
+            }
+        ],
+        "actions": [
+            {
+                "name": "enable",
+                "params": [{"name": "callback", "optional":true}],
+                "description": "Enable the sound sensor."
+            },
+
+            {
+                "name": "disable",
+                "params": [{"name": "callback", "optional":true}],
+                "description": "Disable the sound sensor."
+            }
+        ]
+    },
+    {
+        "name": "Temperature Humidity Sensor",
+        "mod_name": "DHT11",
+        "events": [],
+        "status": ["Temperature", "RelativeHumidity"],
+        "properties": [],
+        "actions": []        
+    }
+]

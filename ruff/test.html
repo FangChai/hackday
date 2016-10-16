@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <canvas id="myCanvas"></canvas>
+</body>
+<script type="text/javascript">
+//    var can = document.getElementById();
+//    var cans = can.getContext('2d');
+//    cans.beginPath();
+//    cans.arc(400,400,200,0,Math.PI);
+//    cans.strokeStyle = 'red';
+//    cans.lineWidth = 10;
+//    cans.stroke();
+//    cans.closePath();
+var c=document.getElementById("myCanvas");
+var ctx=c.getContext("2d");
+ctx.beginPath();
+ctx.arc(95,50,40,0,2*Math.PI);
+ctx.stroke();
+</script>
+</html>
